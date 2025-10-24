@@ -159,30 +159,30 @@ async function analyzeEmailRuleBased(emailText: string) {
   
   // Check for multiple exclamation marks
   const exclamationCount = (emailText.match(/!/g) || []).length;
-  if (exclamationCount >= 3) score += 15;
-  else if (exclamationCount >= 2) score += 10;
+  if (exclamationCount >= 3) score += 25;
+  else if (exclamationCount >= 2) score += 15;
   
   // Check for all caps words
   const capsWords = words.filter(word => 
     word.length > 2 && word === word.toUpperCase() && /[A-Z]/.test(word)
   );
-  if (capsWords.length >= 3) score += 15;
-  else if (capsWords.length >= 1) score += 10;
+  if (capsWords.length >= 3) score += 25;
+  else if (capsWords.length >= 1) score += 15;
   
   // Check for money symbols
   const hasMoney = lowerText.includes('£') || lowerText.includes('$') || lowerText.includes('€');
-  if (hasMoney) score += 10;
+  if (hasMoney) score += 20;
   
   // Check for phone numbers (UK format)
   const hasPhoneNumber = /\b0[0-9]{10}\b/.test(emailText);
-  if (hasPhoneNumber) score += 10;
+  if (hasPhoneNumber) score += 20;
   
   // Check for suspicious URLs
   const hasURL = lowerText.includes('http') || lowerText.includes('www.') || lowerText.includes('.com');
-  if (hasURL) score += 10;
+  if (hasURL) score += 15;
   
-  // Suspicious words contribution
-  score += Math.min(suspiciousWords.length * 8, 40);
+  // Suspicious words contribution (most important indicator)
+  score += Math.min(suspiciousWords.length * 20, 60);
   
   // Determine if spam
   const confidence = Math.min(score, 100);
