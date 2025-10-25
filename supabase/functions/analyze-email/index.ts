@@ -103,9 +103,18 @@ function analyzeEmailWithML(emailText: string) {
     score += 20;
   }
   
-  // Normalize to confidence percentage
-  const confidence = Math.min(score, 100);
-  const isSpam = confidence >= 50;
+  // Normalize score to 0-100 range
+  const normalizedScore = Math.min(score, 100);
+  
+  // Determine if spam (threshold: 50)
+  const isSpam = normalizedScore >= 50;
+  
+  // Calculate confidence:
+  // - For spam: confidence = how strong the spam signals are
+  // - For ham: confidence = how weak the spam signals are (inverse)
+  const confidence = isSpam 
+    ? normalizedScore  // Spam: high score = high confidence
+    : Math.max(100 - normalizedScore, 60);  // Ham: low score = high confidence (min 60%)
   
   return {
     isSpam,
