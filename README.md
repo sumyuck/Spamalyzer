@@ -377,63 +377,6 @@ Sarah
 
 ---
 
-## 🎓 Professor Presentation Guide
-
-### What We Built
-
-**"A production-grade spam detection system using hybrid ML + LLM architecture"**
-
-### Key Points to Emphasize
-
-1. **Real Machine Learning Implementation**
-   - ✅ Trained on 5,572 real emails from UCI ML Repository
-   - ✅ Standard ML pipeline: preprocessing → feature extraction → training → evaluation
-   - ✅ 96.6% test accuracy using TF-IDF + Logistic Regression
-   - ✅ Follows industry best practices (train-test split, proper evaluation)
-
-2. **Modern LLM Integration**
-   - ✅ Google Gemini 2.5 Flash API for generating explanations
-   - ✅ Provides contextual, human-readable analysis
-   - ✅ Enhances interpretability ("explainable AI")
-
-3. **Production Deployment**
-   - ✅ Deployed as serverless edge function (scales automatically)
-   - ✅ Real-time inference (<500ms total latency)
-   - ✅ Clean architecture: Training (Python) → Inference (TypeScript) → UI (React)
-   - ✅ Actually accessible via web URL (not just a notebook)
-
-4. **Technical Sophistication**
-   - ✅ Cross-platform ML deployment (Python → TypeScript)
-   - ✅ Weighted multi-factor scoring algorithm
-   - ✅ Category-based threat detection (phishing, urgency, financial)
-   - ✅ Fallback mechanisms (LLM failure handling)
-
-### Demo Flow
-
-1. **Show the Training Script** (`train_and_export.py`)
-   - Explain dataset (5,572 emails)
-   - Walk through TF-IDF + Logistic Regression
-   - Show accuracy metrics (96.6%)
-
-2. **Show the Edge Function** (`supabase/functions/analyze-email/index.ts`)
-   - Explain indicator detection
-   - Show scoring algorithm
-   - Demonstrate LLM integration
-
-3. **Live Demo**
-   - Paste phishing email → show SPAM detection with explanation
-   - Paste legitimate email → show SAFE detection
-   - Highlight confidence scores and detected patterns
-
-### Why This Is Impressive
-
-- **Not just a notebook:** Fully deployed web application
-- **Hybrid approach:** Combines classical ML (fast, deterministic) with modern LLM (contextual, interpretable)
-- **Real-world ready:** Handles edge cases, has fallbacks, scales automatically
-- **Complete pipeline:** From raw data → trained model → production API → user interface
-
----
-
 ## 📊 Model Performance Metrics
 
 | Metric | Value |
@@ -469,40 +412,12 @@ Sarah
 
 ---
 
-## 🏆 What Makes This Project Stand Out
+## Summary
 
-1. ✅ **Complete ML Pipeline:** Raw data → training → deployment (not just theory)
-2. ✅ **Real Dataset:** 5,572 real emails from UCI repository
-3. ✅ **Hybrid Architecture:** Traditional ML + Modern LLM
-4. ✅ **Production Deployment:** Actually deployed and accessible via URL
-5. ✅ **Scalable Infrastructure:** Serverless, auto-scales to millions of users
-6. ✅ **Explainable AI:** Provides clear reasoning for all decisions
-7. ✅ **Cross-Platform:** Python training → TypeScript inference (real engineering)
-
----
-
-## 📝 Dependencies
-
-### Python (Training)
-```txt
-numpy==1.24.3
-pandas==2.0.3
-scikit-learn==1.3.0
-```
-
-### Node.js (Frontend)
-- React, TypeScript, Vite, Tailwind CSS
-- Supabase client for edge function calls
-
----
-
-## 📧 Additional Notes
-
-- **LOVABLE_API_KEY:** Auto-provisioned secret for Gemini API access
-- **Edge Function:** Deploys automatically on code push
-- **Cold Start:** <100ms (serverless architecture)
-- **Rate Limits:** Handled gracefully with fallback explanations
-
----
-
-Built with [Lovable](https://lovable.dev) - AI-powered full-stack development platform
+1.  **Complete ML Pipeline:** Raw data → training → deployment (not just theory)
+2.  **Real Dataset:** 5,572 real emails from UCI repository
+3.  **Hybrid Architecture:** Traditional ML + Modern LLM
+4.  **Production Deployment:** Actually deployed and accessible via URL
+5.  **Scalable Infrastructure:** Serverless, auto-scales to millions of users
+6.  **Explainable AI:** Provides clear reasoning for all decisions
+7.  **Cross-Platform:** Python training → TypeScript inference (real engineering)
