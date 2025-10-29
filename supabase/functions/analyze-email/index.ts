@@ -10,15 +10,20 @@ let modelData: any = null;
 
 async function loadModelWeights() {
   if (!modelData) {
-    const modelFile = await Deno.readTextFile(
-      './model_weights.json'
-    );
-    modelData = JSON.parse(modelFile);
-    console.log('Model loaded:', {
-      models: modelData.model_types,
-      features: modelData.dataset_info.n_features,
-      svm_accuracy: modelData.svm.test_accuracy
-    });
+    try {
+      // Try to read from the same directory as the function
+      const modelPath = new URL('./model_weights.json', import.meta.url).pathname;
+      const modelFile = await Deno.readTextFile(modelPath);
+      modelData = JSON.parse(modelFile);
+      console.log('Model loaded successfully:', {
+        models: modelData.model_types,
+        features: modelData.dataset_info.n_features,
+        svm_accuracy: modelData.svm.test_accuracy
+      });
+    } catch (error) {
+      console.error('Failed to load model weights:', error);
+      throw new Error('Model weights file not found. Please ensure model_weights.json is in the function directory.');
+    }
   }
   return modelData;
 }
