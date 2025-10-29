@@ -128,8 +128,13 @@ const Index = () => {
               <p className="text-sm text-muted-foreground mb-2">
                 <strong>Example:</strong> Try analyzing this spam email:
               </p>
-              <p className="text-xs font-mono bg-background p-3 rounded-md border">
-                "Subject: Urgent Account Verification Required\n\nDear Valued Customer,\n\nWe have detected unusual activity on your account. To restore full access, please verify your identity by clicking the link below within 24 hours. Failure to confirm may result in permanent account suspension.\n\nVerify Now: http://secure-bank-verify.com/confirm\n\nThank you,\nSecurity Team"
+              <p className="text-xs font-mono bg-background p-3 rounded-md border whitespace-pre-line">
+                Subject: Urgent Account Verification Required{"\n\n"}
+                Dear Valued Customer,{"\n\n"}
+                We have detected unusual activity on your account. To restore full access, please verify your identity by clicking the link below within 24 hours. Failure to confirm may result in permanent account suspension.{"\n\n"}
+                Verify Now: http://secure-bank-verify.com/confirm{"\n\n"}
+                Thank you,{"\n"}
+                Security Team
               </p>
             </Card>
           </div>
