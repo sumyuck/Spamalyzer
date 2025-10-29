@@ -5,30 +5,142 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Enhanced spam indicators categorized by threat type
+// Load trained model weights
+let modelData: any = null;
+
+async function loadModelWeights() {
+  if (!modelData) {
+    const modelFile = await Deno.readTextFile(
+      './model_weights.json'
+    );
+    modelData = JSON.parse(modelFile);
+    console.log('Model loaded:', {
+      models: modelData.model_types,
+      features: modelData.dataset_info.n_features,
+      svm_accuracy: modelData.svm.test_accuracy
+    });
+  }
+  return modelData;
+}
+
+// Extract word frequency features from email text
+function extractWordFrequencies(emailText: string, featureNames: string[]): number[] {
+  const lowerText = emailText.toLowerCase();
+  // Remove special characters and split into words
+  const words = lowerText.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 0);
+  
+  // Count word frequencies
+  const wordCounts: { [key: string]: number } = {};
+  words.forEach(word => {
+    wordCounts[word] = (wordCounts[word] || 0) + 1;
+  });
+  
+  // Create feature vector matching training data
+  const features: number[] = [];
+  featureNames.forEach(feature => {
+    // Feature names in the dataset are the actual words
+    features.push(wordCounts[feature.toLowerCase()] || 0);
+  });
+  
+  return features;
+}
+
+// Scale features using MinMaxScaler parameters
+function scaleFeatures(features: number[], scaler: any): number[] {
+  return features.map((value, i) => {
+    const min = scaler.data_min[i];
+    const scale = scaler.scale[i];
+    if (scale === 0) return 0; // Handle zero scale
+    return (value - min) * scale;
+  });
+}
+
+// Calculate Euclidean distance between two vectors
+function euclideanDistance(a: number[], b: number[]): number {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) {
+    sum += Math.pow(a[i] - b[i], 2);
+  }
+  return Math.sqrt(sum);
+}
+
+// KNN prediction
+function predictKNN(scaledFeatures: number[], knnData: any): { prediction: number; confidence: number } {
+  const k = knnData.n_neighbors;
+  const trainingData = knnData.training_data;
+  const trainingLabels = knnData.training_labels;
+  
+  // Calculate distances to all training samples
+  const distances: { distance: number; label: number }[] = [];
+  for (let i = 0; i < trainingData.length; i++) {
+    const dist = euclideanDistance(scaledFeatures, trainingData[i]);
+    distances.push({ distance: dist, label: trainingLabels[i] });
+  }
+  
+  // Sort by distance and get k nearest neighbors
+  distances.sort((a, b) => a.distance - b.distance);
+  const kNearest = distances.slice(0, k);
+  
+  // Vote for the class
+  const votes = kNearest.reduce((acc, neighbor) => {
+    acc[neighbor.label] = (acc[neighbor.label] || 0) + 1;
+    return acc;
+  }, {} as { [key: number]: number });
+  
+  const prediction = votes[1] > (votes[0] || 0) ? 1 : 0;
+  const confidence = (Math.max(votes[0] || 0, votes[1] || 0) / k) * 100;
+  
+  return { prediction, confidence };
+}
+
+// SVM prediction (simplified linear kernel)
+function predictSVM(scaledFeatures: number[], svmData: any): { prediction: number; confidence: number } {
+  const supportVectors = svmData.support_vectors;
+  const dualCoef = svmData.dual_coef[0];
+  const intercept = svmData.intercept;
+  
+  // Calculate decision function: sum(alpha_i * y_i * K(x_i, x)) + b
+  let decisionValue = intercept;
+  for (let i = 0; i < supportVectors.length; i++) {
+    // Linear kernel: K(x_i, x) = x_i · x (dot product)
+    let dotProduct = 0;
+    for (let j = 0; j < scaledFeatures.length; j++) {
+      dotProduct += supportVectors[i][j] * scaledFeatures[j];
+    }
+    decisionValue += dualCoef[i] * dotProduct;
+  }
+  
+  // Prediction: sign(decision_value)
+  const prediction = decisionValue >= 0 ? 1 : 0;
+  
+  // Convert decision value to confidence (0-100%)
+  // Using sigmoid-like transformation
+  const confidence = Math.min(Math.max(Math.abs(decisionValue) * 10, 50), 99);
+  
+  return { prediction, confidence };
+}
+
+// Enhanced spam indicators for explanation context
 const SPAM_INDICATORS = {
   phishing: [
     'verify', 'confirm identity', 'unusual activity', 'suspended', 'limited', 
     'restore access', 'account number', 'security team', 'verify within',
-    'temporarily limited', 'confirm your identity', 'last transaction',
-    'account will remain', 'restore full access'
+    'temporarily limited', 'confirm your identity', 'last transaction'
   ],
   urgency: [
     'urgent', 'immediate', 'expires', '24 hours', 'limited time', 'act now', 
-    'today only', 'within 24 hours', 'do not', 'must act', 'expires soon',
-    'time sensitive', 'respond immediately'
+    'today only', 'within 24 hours', 'must act', 'expires soon'
   ],
   financial: [
     'cash', 'prize', 'winner', 'free', 'claim', 'won', 'guaranteed', 
-    '£', '$', '€', 'bonus', 'discount', 'cheap', 'loan', 'credit'
+    'bonus', 'discount', 'cheap', 'loan', 'credit'
   ],
   suspicious: [
     'click here', 'call now', 'txt', 'text', 'reply', 'mobile', 
-    'congratulations', 'selected', 'offer expires', '$$$', '!!!'
+    'congratulations', 'selected', 'offer expires'
   ]
 };
 
-// Detect indicators by category
 function detectIndicators(emailText: string) {
   const lowerText = emailText.toLowerCase();
   const detected = {
@@ -49,12 +161,25 @@ function detectIndicators(emailText: string) {
   return detected;
 }
 
-// ML-inspired feature extraction and scoring
-function analyzeEmailWithML(emailText: string) {
-  const lowerText = emailText.toLowerCase();
-  const words = lowerText.split(/\s+/);
+// Main ML analysis using trained KNN and SVM models
+async function analyzeEmailWithML(emailText: string) {
+  const model = await loadModelWeights();
   
-  // Detect indicators
+  // Extract word frequency features
+  const features = extractWordFrequencies(emailText, model.feature_names);
+  
+  // Scale features
+  const scaledFeatures = scaleFeatures(features, model.scaler);
+  
+  // Get predictions from both models
+  const knnResult = predictKNN(scaledFeatures, model.knn);
+  const svmResult = predictSVM(scaledFeatures, model.svm);
+  
+  // Use SVM as primary model (typically more accurate for this task)
+  const isSpam = svmResult.prediction === 1;
+  const confidence = svmResult.confidence;
+  
+  // Detect indicators for explanation context
   const indicators = detectIndicators(emailText);
   const allSuspiciousWords = [
     ...indicators.phishing,
@@ -63,64 +188,21 @@ function analyzeEmailWithML(emailText: string) {
     ...indicators.suspicious
   ];
   
-  // Calculate ML-inspired score
-  let score = 0;
-  
-  // Phishing indicators (highest weight - most dangerous)
-  score += indicators.phishing.length * 35;
-  
-  // Urgency indicators (high weight - pressure tactics)
-  score += indicators.urgency.length * 25;
-  
-  // Financial indicators (medium-high weight)
-  score += indicators.financial.length * 20;
-  
-  // General suspicious patterns (medium weight)
-  score += indicators.suspicious.length * 15;
-  
-  // Multiple exclamation marks
-  const exclamationCount = (emailText.match(/!/g) || []).length;
-  if (exclamationCount >= 3) score += 20;
-  else if (exclamationCount >= 2) score += 10;
-  
-  // All caps words (shouting)
-  const capsWords = words.filter(word => 
-    word.length > 2 && word === word.toUpperCase() && /[A-Z]/.test(word)
-  );
-  if (capsWords.length >= 3) score += 20;
-  else if (capsWords.length >= 1) score += 10;
-  
-  // Money symbols
-  if (lowerText.includes('£') || lowerText.includes('$') || lowerText.includes('€')) {
-    score += 15;
-  }
-  
-  // Phone numbers (UK format)
-  if (/\b0[0-9]{10}\b/.test(emailText)) score += 15;
-  
-  // Suspicious URLs
-  if (lowerText.includes('http') || lowerText.includes('www.') || lowerText.includes('.com')) {
-    score += 20;
-  }
-  
-  // Normalize score to 0-100 range
-  const normalizedScore = Math.min(score, 100);
-  
-  // Determine if spam (threshold: 50)
-  const isSpam = normalizedScore >= 50;
-  
-  // Calculate confidence:
-  // - For spam: confidence = how strong the spam signals are
-  // - For ham: confidence = how weak the spam signals are (inverse)
-  const confidence = isSpam 
-    ? normalizedScore  // Spam: high score = high confidence
-    : Math.max(100 - normalizedScore, 60);  // Ham: low score = high confidence (min 60%)
+  console.log('ML Analysis:', {
+    knn: { prediction: knnResult.prediction, confidence: knnResult.confidence },
+    svm: { prediction: svmResult.prediction, confidence: svmResult.confidence },
+    final: { isSpam, confidence }
+  });
   
   return {
     isSpam,
     confidence,
     suspiciousWords: allSuspiciousWords,
-    indicators
+    indicators,
+    models: {
+      knn: knnResult,
+      svm: svmResult
+    }
   };
 }
 
@@ -246,8 +328,8 @@ serve(async (req) => {
 
     console.log('Analyzing email with length:', emailText.length);
 
-    // Run ML-inspired analysis
-    const mlAnalysis = analyzeEmailWithML(emailText);
+    // Run ML analysis with trained KNN and SVM models
+    const mlAnalysis = await analyzeEmailWithML(emailText);
     console.log('ML Analysis complete:', { isSpam: mlAnalysis.isSpam, confidence: mlAnalysis.confidence });
 
     // Generate AI explanation using Gemini
