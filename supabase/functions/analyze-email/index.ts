@@ -12,12 +12,12 @@ function calculateSpamScore(indicators: {
   financial: string[];
   suspicious: string[];
 }): { isSpam: boolean; confidence: number } {
-  // Weight each category
+  // Weight each category (increased for better accuracy)
   const weights = {
-    phishing: 3.0,
-    urgency: 2.0,
-    financial: 2.5,
-    suspicious: 1.5
+    phishing: 5.0,
+    urgency: 3.5,
+    financial: 4.0,
+    suspicious: 2.5
   };
   
   // Calculate weighted score
@@ -27,13 +27,30 @@ function calculateSpamScore(indicators: {
   score += indicators.financial.length * weights.financial;
   score += indicators.suspicious.length * weights.suspicious;
   
-  // Normalize to 0-100 scale
-  const maxPossibleScore = 30;
-  const normalizedScore = Math.min((score / maxPossibleScore) * 100, 100);
+  // Normalize to 0-100 scale (lower threshold for better sensitivity)
+  const maxPossibleScore = 20;
+  const normalizedScore = Math.min((score / maxPossibleScore) * 100, 99);
   
-  // Determine if spam (threshold: 30%)
-  const isSpam = normalizedScore > 30;
-  const confidence = isSpam ? normalizedScore : (100 - normalizedScore);
+  // Determine if spam (threshold: 25%)
+  const isSpam = normalizedScore > 25;
+  
+  // Boost confidence for clear cases
+  let confidence = isSpam ? normalizedScore : (100 - normalizedScore);
+  
+  // If multiple categories detected, boost confidence
+  const categoriesDetected = [
+    indicators.phishing.length > 0,
+    indicators.urgency.length > 0,
+    indicators.financial.length > 0,
+    indicators.suspicious.length > 0
+  ].filter(Boolean).length;
+  
+  if (categoriesDetected >= 2) {
+    confidence = Math.min(confidence * 1.2, 99);
+  }
+  if (categoriesDetected >= 3) {
+    confidence = Math.min(confidence * 1.15, 99);
+  }
   
   return { isSpam, confidence: Math.round(confidence) };
 }
@@ -176,7 +193,9 @@ Keep it concise and actionable.`;
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    const content = data.choices[0].message.content;
+    // Remove markdown formatting (bold, italics, etc.)
+    return content.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
   } catch (error) {
     console.error('Error calling Gemini API:', error);
     return generateFallbackExplanation(isSpam, indicators);
