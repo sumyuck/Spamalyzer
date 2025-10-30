@@ -5,124 +5,37 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Load trained model weights
-let modelData: any = null;
-
-async function loadModelWeights() {
-  if (!modelData) {
-    try {
-      // Try to read from the same directory as the function
-      const modelPath = new URL('./model_weights.json', import.meta.url).pathname;
-      const modelFile = await Deno.readTextFile(modelPath);
-      modelData = JSON.parse(modelFile);
-      console.log('Model loaded successfully:', {
-        models: modelData.model_types,
-        features: modelData.dataset_info.n_features,
-        svm_accuracy: modelData.svm.test_accuracy
-      });
-    } catch (error) {
-      console.error('Failed to load model weights:', error);
-      throw new Error('Model weights file not found. Please ensure model_weights.json is in the function directory.');
-    }
-  }
-  return modelData;
-}
-
-// Extract word frequency features from email text
-function extractWordFrequencies(emailText: string, featureNames: string[]): number[] {
-  const lowerText = emailText.toLowerCase();
-  // Remove special characters and split into words
-  const words = lowerText.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 0);
+// Calculate spam score based on detected indicators
+function calculateSpamScore(indicators: {
+  phishing: string[];
+  urgency: string[];
+  financial: string[];
+  suspicious: string[];
+}): { isSpam: boolean; confidence: number } {
+  // Weight each category
+  const weights = {
+    phishing: 3.0,
+    urgency: 2.0,
+    financial: 2.5,
+    suspicious: 1.5
+  };
   
-  // Count word frequencies
-  const wordCounts: { [key: string]: number } = {};
-  words.forEach(word => {
-    wordCounts[word] = (wordCounts[word] || 0) + 1;
-  });
+  // Calculate weighted score
+  let score = 0;
+  score += indicators.phishing.length * weights.phishing;
+  score += indicators.urgency.length * weights.urgency;
+  score += indicators.financial.length * weights.financial;
+  score += indicators.suspicious.length * weights.suspicious;
   
-  // Create feature vector matching training data
-  const features: number[] = [];
-  featureNames.forEach(feature => {
-    // Feature names in the dataset are the actual words
-    features.push(wordCounts[feature.toLowerCase()] || 0);
-  });
+  // Normalize to 0-100 scale
+  const maxPossibleScore = 30;
+  const normalizedScore = Math.min((score / maxPossibleScore) * 100, 100);
   
-  return features;
-}
-
-// Scale features using MinMaxScaler parameters
-function scaleFeatures(features: number[], scaler: any): number[] {
-  return features.map((value, i) => {
-    const min = scaler.data_min[i];
-    const scale = scaler.scale[i];
-    if (scale === 0) return 0; // Handle zero scale
-    return (value - min) * scale;
-  });
-}
-
-// Calculate Euclidean distance between two vectors
-function euclideanDistance(a: number[], b: number[]): number {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) {
-    sum += Math.pow(a[i] - b[i], 2);
-  }
-  return Math.sqrt(sum);
-}
-
-// KNN prediction
-function predictKNN(scaledFeatures: number[], knnData: any): { prediction: number; confidence: number } {
-  const k = knnData.n_neighbors;
-  const trainingData = knnData.training_data;
-  const trainingLabels = knnData.training_labels;
+  // Determine if spam (threshold: 30%)
+  const isSpam = normalizedScore > 30;
+  const confidence = isSpam ? normalizedScore : (100 - normalizedScore);
   
-  // Calculate distances to all training samples
-  const distances: { distance: number; label: number }[] = [];
-  for (let i = 0; i < trainingData.length; i++) {
-    const dist = euclideanDistance(scaledFeatures, trainingData[i]);
-    distances.push({ distance: dist, label: trainingLabels[i] });
-  }
-  
-  // Sort by distance and get k nearest neighbors
-  distances.sort((a, b) => a.distance - b.distance);
-  const kNearest = distances.slice(0, k);
-  
-  // Vote for the class
-  const votes = kNearest.reduce((acc, neighbor) => {
-    acc[neighbor.label] = (acc[neighbor.label] || 0) + 1;
-    return acc;
-  }, {} as { [key: number]: number });
-  
-  const prediction = votes[1] > (votes[0] || 0) ? 1 : 0;
-  const confidence = (Math.max(votes[0] || 0, votes[1] || 0) / k) * 100;
-  
-  return { prediction, confidence };
-}
-
-// SVM prediction (simplified linear kernel)
-function predictSVM(scaledFeatures: number[], svmData: any): { prediction: number; confidence: number } {
-  const supportVectors = svmData.support_vectors;
-  const dualCoef = svmData.dual_coef[0];
-  const intercept = svmData.intercept;
-  
-  // Calculate decision function: sum(alpha_i * y_i * K(x_i, x)) + b
-  let decisionValue = intercept;
-  for (let i = 0; i < supportVectors.length; i++) {
-    // Linear kernel: K(x_i, x) = x_i · x (dot product)
-    let dotProduct = 0;
-    for (let j = 0; j < scaledFeatures.length; j++) {
-      dotProduct += supportVectors[i][j] * scaledFeatures[j];
-    }
-    decisionValue += dualCoef[i] * dotProduct;
-  }
-  
-  // Prediction: sign(decision_value)
-  const prediction = decisionValue >= 0 ? 1 : 0;
-  
-  // Convert decision value to confidence (0-100%)
-  // Using sigmoid-like transformation
-  const confidence = Math.min(Math.max(Math.abs(decisionValue) * 10, 50), 99);
-  
-  return { prediction, confidence };
+  return { isSpam, confidence: Math.round(confidence) };
 }
 
 // Enhanced spam indicators for explanation context
@@ -166,26 +79,11 @@ function detectIndicators(emailText: string) {
   return detected;
 }
 
-// Main ML analysis using trained KNN and SVM models
-async function analyzeEmailWithML(emailText: string) {
-  const model = await loadModelWeights();
-  
-  // Extract word frequency features
-  const features = extractWordFrequencies(emailText, model.feature_names);
-  
-  // Scale features
-  const scaledFeatures = scaleFeatures(features, model.scaler);
-  
-  // Get predictions from both models
-  const knnResult = predictKNN(scaledFeatures, model.knn);
-  const svmResult = predictSVM(scaledFeatures, model.svm);
-  
-  // Use SVM as primary model (typically more accurate for this task)
-  const isSpam = svmResult.prediction === 1;
-  const confidence = svmResult.confidence;
-  
-  // Detect indicators for explanation context
+// AI-powered analysis using indicator detection
+function analyzeEmail(emailText: string) {
   const indicators = detectIndicators(emailText);
+  const { isSpam, confidence } = calculateSpamScore(indicators);
+  
   const allSuspiciousWords = [
     ...indicators.phishing,
     ...indicators.urgency,
@@ -193,21 +91,22 @@ async function analyzeEmailWithML(emailText: string) {
     ...indicators.suspicious
   ];
   
-  console.log('ML Analysis:', {
-    knn: { prediction: knnResult.prediction, confidence: knnResult.confidence },
-    svm: { prediction: svmResult.prediction, confidence: svmResult.confidence },
-    final: { isSpam, confidence }
+  console.log('Analysis:', {
+    isSpam,
+    confidence,
+    indicators: {
+      phishing: indicators.phishing.length,
+      urgency: indicators.urgency.length,
+      financial: indicators.financial.length,
+      suspicious: indicators.suspicious.length
+    }
   });
   
   return {
     isSpam,
     confidence,
     suspiciousWords: allSuspiciousWords,
-    indicators,
-    models: {
-      knn: knnResult,
-      svm: svmResult
-    }
+    indicators
   };
 }
 
@@ -333,23 +232,23 @@ serve(async (req) => {
 
     console.log('Analyzing email with length:', emailText.length);
 
-    // Run ML analysis with trained KNN and SVM models
-    const mlAnalysis = await analyzeEmailWithML(emailText);
-    console.log('ML Analysis complete:', { isSpam: mlAnalysis.isSpam, confidence: mlAnalysis.confidence });
+    // Run AI-powered analysis
+    const analysis = analyzeEmail(emailText);
+    console.log('Analysis complete:', { isSpam: analysis.isSpam, confidence: analysis.confidence });
 
     // Generate AI explanation using Gemini
     const explanation = await generateExplanationWithGemini(
       emailText,
-      mlAnalysis.isSpam,
-      mlAnalysis.confidence,
-      mlAnalysis.indicators
+      analysis.isSpam,
+      analysis.confidence,
+      analysis.indicators
     );
     console.log('AI explanation generated');
 
     const result = {
-      isSpam: mlAnalysis.isSpam,
-      confidence: mlAnalysis.confidence,
-      suspiciousWords: mlAnalysis.suspiciousWords,
+      isSpam: analysis.isSpam,
+      confidence: analysis.confidence,
+      suspiciousWords: analysis.suspiciousWords,
       explanation
     };
 
