@@ -239,20 +239,6 @@ return {
 4. Gemini generates 2-3 sentence human-friendly explanation
 5. Fallback to rule-based explanation if Gemini unavailable
 
-**Example Prompt to Gemini**:
-```
-Email: "Verify your account within 24 hours..."
-ML Prediction: SPAM (87% confidence)
-Indicators:
-- Phishing: verify, account
-- Urgency: 24 hours, immediate
-
-Explain why this is spam in simple terms.
-```
-
-**Gemini Response**:
-"This email is likely a phishing attempt. It uses urgent language ('24 hours') and asks you to verify your account, which are common tactics used by scammers. Do not click any links."
-
 ---
 
 ## 🏗️ System Architecture
@@ -408,125 +394,8 @@ Click here to verify: http://suspicious-link.com
 Security Team
 ```
 
-### Analysis Output:
-
-**Classification**: 🚨 **SPAM** (Confidence: 89%)
-
-**Detected Indicators**:
-- **Phishing**: unusual activity, suspended, temporarily limited, verify your identity, restore full access
-- **Urgency**: urgent, within 24 hours
-- **Suspicious**: click here
-
-**AI Explanation**:
-"This email is a classic phishing attempt. It creates artificial urgency with a 24-hour deadline, claims your account is suspended, and asks you to verify your identity through a suspicious link. Legitimate companies never ask you to verify your account this way. Do not click the link."
-
 ---
 
-## 🧠 Technical Deep Dive
-
-### Why Word Frequency Features?
-
-**Traditional NLP Approach**:
-1. Count how many times each word appears in email
-2. Create a vector of word frequencies
-3. Train ML models on these vectors
-
-**Advantages**:
-- **Spam words**: Words like "free", "winner", "urgent" appear more in spam
-- **Ham words**: Words like "meeting", "attached", "regards" appear more in legitimate emails
-- **3000+ features**: Captures rich vocabulary patterns
-- **Proven effective**: Standard approach in spam detection
-
-### Why MinMaxScaler?
-
-**Without Scaling**:
-- Word "the" might appear 50 times (high frequency)
-- Word "bitcoin" might appear 2 times (low frequency)
-- KNN would be dominated by high-frequency common words
-
-**With MinMaxScaler**:
-- All features normalized to [0, 1] range
-- Each word gets equal weight in distance calculations
-- Improves model performance significantly
-
-### KNN: How It Classifies
-
-**Example**:
-1. New email: "Free cash prize!"
-2. Extract features: `[0, 5, 2, 1, ...]`
-3. Scale features: `[0, 0.8, 0.3, 0.2, ...]`
-4. Find nearest neighbor in training data
-5. If nearest email was spam → classify as spam
-6. If nearest email was ham → classify as ham
-
-**Distance Calculation**:
-```
-distance = sqrt((0-0.1)^2 + (0.8-0.9)^2 + ... + (0.2-0.3)^2)
-```
-
-### SVM: How It Classifies
-
-**Training Phase**:
-1. Find hyperplane that best separates spam from ham
-2. Maximize margin (distance) to nearest points
-3. Store support vectors (boundary points) and coefficients
-
-**Prediction Phase**:
-1. Calculate: f(x) = sum(alpha * y * (support_vector · email)) + bias
-2. If f(x) > 0: spam
-3. If f(x) < 0: ham
-4. |f(x)| = confidence (larger = more confident)
-
----
-
-## 🎓 Explaining to Your Professor
-
-### Key Points to Emphasize
-
-1. **Dataset Selection**:
-   - "I used a pre-processed email spam dataset with 5,172 samples and 3,000+ word frequency features. Each feature represents the frequency of a specific word, allowing the models to learn which words are indicative of spam vs. legitimate emails."
-
-2. **Model Choice Rationale**:
-   - **KNN**: "I chose KNN because it's intuitive and instance-based. It works by finding the most similar email in the training set. With k=1, I achieved 97% accuracy."
-   - **SVM**: "I chose SVM with a linear kernel because it's highly effective for high-dimensional data like text. It finds the optimal decision boundary between spam and ham, achieving 97% accuracy with better generalization than KNN."
-
-3. **Feature Engineering**:
-   - "I used MinMaxScaler to normalize all word frequencies to the [0, 1] range. This is crucial because KNN is distance-based, and without normalization, high-frequency common words would dominate the distance calculations."
-
-4. **Production Deployment**:
-   - "I exported the trained models to JSON format and deployed them to a serverless edge function. This allows real-time predictions on any email with sub-second response times."
-
-5. **AI Enhancement**:
-   - "I integrated Google Gemini LLM to generate human-friendly explanations. The LLM receives the ML prediction, confidence score, and detected spam indicators, then produces a clear explanation suitable for end-users."
-
-### Demo Flow for Professor
-
-1. **Show Training Script**:
-   - Open `train_and_export.py`
-   - Explain data loading, scaling, model training
-   - Show accuracy metrics
-
-2. **Show Exported Weights**:
-   - Open `model_weights.json` (briefly)
-   - Explain it contains all model parameters for production
-
-3. **Show Prediction Logic**:
-   - Open `supabase/functions/analyze-email/index.ts`
-   - Walk through feature extraction → scaling → prediction
-
-4. **Live Demo**:
-   - Open web interface
-   - Paste a real spam email (e.g., phishing attempt)
-   - Show classification, confidence, and AI explanation
-   - Paste a real legitimate email
-   - Show it correctly classifies as ham
-
-5. **Discuss Results**:
-   - 97% test accuracy on both models
-   - SVM chosen as primary due to better generalization
-   - Real-time performance with serverless deployment
-
----
 
 ## 🔧 Technologies Used
 
@@ -539,32 +408,15 @@ distance = sqrt((0-0.1)^2 + (0.8-0.9)^2 + ... + (0.2-0.3)^2)
 ### Backend
 - **Deno**: Serverless runtime for edge functions
 - **TypeScript**: Type-safe backend logic
-- **Lovable Cloud**: Serverless infrastructure
 
 ### AI/LLM
 - **Google Gemini 2.5 Flash**: AI explanation generation
-- **Lovable AI Gateway**: Secure LLM access
 
 ### Frontend
 - **React**: UI framework
 - **TypeScript**: Type safety
 - **Tailwind CSS**: Styling
 - **Lucide React**: Icons
-
----
-
-## 📚 Academic References
-
-### Algorithms
-- **KNN**: Cover, T., & Hart, P. (1967). "Nearest neighbor pattern classification"
-- **SVM**: Cortes, C., & Vapnik, V. (1995). "Support-vector networks"
-
-### Spam Detection
-- Sahami, M., et al. (1998). "A Bayesian approach to filtering junk e-mail"
-- Drucker, H., et al. (1999). "Support vector machines for spam categorization"
-
-### Feature Engineering
-- Salton, G., & Buckley, C. (1988). "Term-weighting approaches in automatic text retrieval"
 
 ---
 
@@ -578,10 +430,3 @@ distance = sqrt((0-0.1)^2 + (0.8-0.9)^2 + ... + (0.2-0.3)^2)
 ✅ **Academic Rigor**: Proper train/test split, cross-validation, metrics  
 ✅ **Professional UI**: Clean, responsive, real-time interface  
 
----
-
-## 📞 Questions?
-
-If you have questions about the implementation, feel free to ask in the Lovable chat or refer to the code comments in each file.
-
-**Good luck with your presentation! 🎓**
